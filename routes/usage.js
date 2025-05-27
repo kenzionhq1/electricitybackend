@@ -4,7 +4,7 @@ const authMiddleware = require("../middleware/auth"); // Import the auth middlew
 const router = express.Router();
 
 // Example protected route
-router.get("usage/", authMiddleware, (req, res) => {
+router.get("/usage", authMiddleware, (req, res) => {
   res.json({ message: "Usage data retrieved successfully!" });
 });
 
