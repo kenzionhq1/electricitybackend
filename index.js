@@ -5,37 +5,16 @@ require("dotenv").config();
 
 const app = express();
 
-const jwt = require("jsonwebtoken");
-
-function auth(req, res, next) {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Access denied. No token provided." });
-  }
-
-  const token = authHeader.split(" ")[1];
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next(); // Allow access to the next middleware/route
-  } catch (err) {
-    res.status(400).json({ message: "Invalid token." });
-  }
-}
-
-module.exports = auth;
-
-
-
 // Middlewares
 app.use(cors());
 app.use(express.json());
 
 // Routes
 const authRoutes = require("./routes/auth");
+const usageRoutes = require("./routes/usage"); // Import usage routes
+
 app.use("/api/auth", authRoutes);
+app.use("/api/usage", usageRoutes); // Use usage routes
 
 // DB Connection
 mongoose.connect(process.env.MONGO_URI, {
@@ -49,10 +28,6 @@ mongoose.connect(process.env.MONGO_URI, {
 app.get("/", (req, res) => {
   res.send("⚡ Electricity Payment API is live");
 });
-
-const usageRoutes = require("./routes/usage");
-app.use("/api/usage", usageRoutes);
-
 
 // Server Start
 const PORT = process.env.PORT || 5000;
