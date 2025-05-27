@@ -50,10 +50,8 @@ app.get("/", (req, res) => {
   res.send("⚡ Electricity Payment API is live");
 });
 
-const auth = require("../middleware/auth");
-router.get("/", auth, (req, res) => {
-  // Your protected usage route
-});
+const usageRoutes = require("./routes/usage");
+app.use("/api/usage", usageRoutes);
 
 
 // Server Start
