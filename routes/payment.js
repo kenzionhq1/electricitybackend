@@ -2,7 +2,9 @@ const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
 const Transaction = require("../models/Transaction");
+const User = require("../models/User");
 
+// POST /api/payment
 router.post("/", auth, async (req, res) => {
   const { meter, amount } = req.body;
 
@@ -11,15 +13,18 @@ router.post("/", auth, async (req, res) => {
   }
 
   try {
-    const newTransaction = new Transaction({
+    const transaction = new Transaction({
       userId: req.user.id,
       meter,
       amount
     });
 
-    await user.findByIdAndUpdate(req.user.id, {
+    await transaction.save();
+
+    await User.findByIdAndUpdate(req.user.id, {
       $inc: { balance: -amount }
     });
+
     const updatedUser = await User.findById(req.user.id);
 
     res.status(201).json({
@@ -31,10 +36,6 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
-
-
-const Transaction = require("../models/Transaction");
-
 // GET /api/payment/history
 router.get("/history", auth, async (req, res) => {
   try {
@@ -44,6 +45,5 @@ router.get("/history", auth, async (req, res) => {
     res.status(500).json({ message: "Failed to load history", error: err.message });
   }
 });
-
 
 module.exports = router;
