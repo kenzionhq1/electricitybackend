@@ -28,4 +28,19 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
+
+
+const Transaction = require("../models/Transaction");
+
+// GET /api/payment/history
+router.get("/history", auth, async (req, res) => {
+  try {
+    const transactions = await Transaction.find({ userId: req.user.id }).sort({ timestamp: -1 });
+    res.json(transactions);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to load history", error: err.message });
+  }
+});
+
+
 module.exports = router;

@@ -1,14 +1,14 @@
 const express = require("express");
-const auth = require("../middleware/auth"); // Import the auth middleware
+const router = express.Router();
+const auth = require("../middleware/auth");
+const User = require("../models/User");
 
-const router = express.Router(); // Use express.Router()
-
-// Example protected route
 router.get("/me", auth, async (req, res) => {
   try {
-    res.json({ message: "User data retrieved successfully!" });
+    const user = await User.findById(req.user.id).select("-password");
+    res.json(user);
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Unable to load user", error: err.message });
   }
 });
 
