@@ -20,9 +20,12 @@ router.post("/", auth, async (req, res) => {
     await user.findByIdAndUpdate(req.user.id, {
       $inc: { balance: -amount }
     });
-    await newTransaction.save();
-    // Update user's balance
-    res.status(201).json({ message: "Payment recorded successfully." });
+    const updatedUser = await User.findById(req.user.id);
+
+    res.status(201).json({
+      message: "Payment recorded successfully.",
+      balance: updatedUser.balance
+    });
   } catch (err) {
     res.status(500).json({ message: "Payment failed", error: err.message });
   }
