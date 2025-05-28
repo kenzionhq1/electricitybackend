@@ -13,8 +13,9 @@ app.use(express.json());
 const authRoutes = require("./routes/auth");
 const usageRoutes = require("./routes/usage"); // Import usage routes
 const paymentRoutes = require("./routes/payment");
+const userRoutes = require("./routes/user");
 app.use("/api/payment", paymentRoutes);
-
+app.use("/api/user", userRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/usage", usageRoutes); // Use usage routes
 
