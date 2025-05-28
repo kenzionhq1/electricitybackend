@@ -1,8 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
-const Transaction = require("../models/Transaction");
+const Transaction = require("../models/Transaction"); // ✅ Only once
 const User = require("../models/User");
+
+// ... the rest of your routes
 
 // POST /api/payment
 router.post("/", auth, async (req, res) => {
