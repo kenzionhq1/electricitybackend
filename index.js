@@ -14,7 +14,7 @@ const authRoutes = require("./routes/auth");
 const usageRoutes = require("./routes/usage");
 const paymentRoutes = require("./routes/payment");
 const userRoutes = require("./routes/user");
-const userRoutes = require("./routes/webhook");
+const webhookRoutes = require("./routes/webhook");
 app.use("/api/auth", authRoutes);
 app.use("/api/usage", usageRoutes);
 app.use("/api/payment", paymentRoutes);
