@@ -1,51 +1,69 @@
 const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/auth");
-const Transaction = require("../models/Transaction"); // ✅ Only once
+const axios = require("axios");
+const Transaction = require("../models/Transaction");
 const User = require("../models/User");
 
-// ... the rest of your routes
+const FLW_SECRET_KEY = process.env.FLW_SECRET_KEY;
 
-// POST /api/payment
-router.post("/", auth, async (req, res) => {
-  const { meter, amount } = req.body;
+// Meter verification
+router.post("/verify", auth, async (req, res) => {
+  const { meter, disco } = req.body;
+  if (!meter || !disco) return res.status(400).json({ message: "Missing fields" });
 
-  if (!meter || !amount) {
-    return res.status(400).json({ message: "Meter and amount are required." });
-  }
+  const response = await axios.post(
+    "https://api.flutterwave.com/v3/bill-items/validate",
+    { item_code: disco, code: meter },
+    { headers: { Authorization: `Bearer ${FLW_SECRET_KEY}` } }
+  );
 
-  try {
-    const transaction = new Transaction({
-      userId: req.user.id,
-      meter,
-      amount
-    });
-
-    await transaction.save();
-
-    await User.findByIdAndUpdate(req.user.id, {
-      $inc: { balance: -amount }
-    });
-
-    const updatedUser = await User.findById(req.user.id);
-
-    res.status(201).json({
-      message: "Payment recorded successfully.",
-      balance: updatedUser.balance
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Payment failed", error: err.message });
-  }
+  const data = response.data.data;
+  res.json({ customer_name: data.customer_name, meter_type: data.type, debt: data.debt || 0 });
 });
 
-// GET /api/payment/history
+// Pay bill
+router.post("/", auth, async (req, res) => {
+  const { meter, amount, disco } = req.body;
+  if (!meter || !amount || !disco) return res.status(400).json({ message: "Missing fields" });
+
+  const user = await User.findById(req.user.id);
+  if (user.balance < amount) return res.status(400).json({ message: "Insufficient balance" });
+
+  user.balance -= amount;
+  await user.save();
+
+  const reference = `epay_${Date.now()}`;
+
+  const flwRes = await axios.post(
+    "https://api.flutterwave.com/v3/bills",
+    {
+      country: "NG",
+      customer: meter,
+      amount,
+      recurrence: "ONCE",
+      type: "PREPAID",
+      reference,
+      bill_item_code: disco
+    },
+    { headers: { Authorization: `Bearer ${FLW_SECRET_KEY}` } }
+  );
+
+  await Transaction.create({
+    userId: user._id,
+    meter,
+    amount,
+    type: "payment",
+    reference
+  });
+
+  res.json({ message: "Payment successful", data: flwRes.data });
+});
+
+// History
 router.get("/history", auth, async (req, res) => {
-  try {
-    const transactions = await Transaction.find({ userId: req.user.id }).sort({ timestamp: -1 });
-    res.json(transactions);
-  } catch (err) {
-    res.status(500).json({ message: "Failed to load history", error: err.message });
-  }
+  const history = await Transaction.find({ userId: req.user.id }).sort({ timestamp: -1 });
+  res.json(history);
 });
 
 module.exports = router;

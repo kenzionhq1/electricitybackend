@@ -14,12 +14,13 @@ const authRoutes = require("./routes/auth");
 const usageRoutes = require("./routes/usage");
 const paymentRoutes = require("./routes/payment");
 const userRoutes = require("./routes/user");
-
+app.use("/api/webhook", require("./routes/webhook"));
 app.use("/api/auth", authRoutes);
 app.use("/api/usage", usageRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/user", userRoutes);
 
+app.use(express.json()); // Must come after raw webhook if using both
 app.get("/", (req, res) => {
   res.send("⚡ Electricity Payment API is live");
 });
