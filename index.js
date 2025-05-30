@@ -14,12 +14,12 @@ const authRoutes = require("./routes/auth");
 const usageRoutes = require("./routes/usage");
 const paymentRoutes = require("./routes/payment");
 const userRoutes = require("./routes/user");
-
+const userRoutes = require("./routes/webhook");
 app.use("/api/auth", authRoutes);
 app.use("/api/usage", usageRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/user", userRoutes);
-
+app.use("/api/webhook", webhookRoutes);
 
 app.get("/", (req, res) => {
   res.send("⚡ Electricity Payment API is live");
@@ -41,12 +41,4 @@ app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PO
 
 // Webhook first for raw body
 app.use("/api/webhook", require("./routes/webhook"));
-
-// Then JSON for the rest
-app.use(cors());
-app.use(express.json());
-
-app.use("/api/auth", require("./routes/auth"));
-app.use("/api/user", require("./routes/user"));
-app.use("/api/payment", require("./routes/payment"));
 
