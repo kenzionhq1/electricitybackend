@@ -5,17 +5,21 @@ const Transaction = require("../models/Transaction");
 
 const FLW_SECRET_HASH = process.env.FLW_SECRET_HASH;
 
+// Receive webhook
 router.post("/", express.raw({ type: "application/json" }), async (req, res) => {
   const signature = req.headers["verif-hash"];
   if (!signature || signature !== FLW_SECRET_HASH) return res.status(401).send("Invalid signature");
 
   const payload = JSON.parse(req.body);
+
   if (payload.event !== "charge.completed" || payload.data.status !== "successful") {
     return res.status(200).send("Ignored");
   }
 
-  const { customer, amount, tx_ref } = payload.data;
-  const user = await User.findOne({ email: customer.email });
+  const { amount, tx_ref, customer } = payload.data;
+  const email = customer.email;
+
+  const user = await User.findOne({ email });
   if (!user) return res.status(404).send("User not found");
 
   user.balance += amount;
