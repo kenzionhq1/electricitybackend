@@ -5,91 +5,61 @@ const axios = require("axios");
 const Transaction = require("../models/Transaction");
 const User = require("../models/User");
 
-const FLW_SECRET_KEY = process.env.FLW_SECRET_KEY;
+const VTPASS_USERNAME = process.env.VTPASS_USERNAME;
+const VTPASS_PASSWORD = process.env.VTPASS_PASSWORD;
+const VTPASS_API = "https://sandbox.vtpass.com/api";
 
-// 🔍 Meter verification
+const headers = {
+  "api-key": VTPASS_USERNAME,
+  "secret-key": VTPASS_PASSWORD,
+  "Content-Type": "application/json"
+};
+
 router.post("/verify", auth, async (req, res) => {
   const { meter, disco } = req.body;
-  if (!meter || !disco) {
-    return res.status(400).json({ message: "Meter and disco are required" });
-  }
-
-  if (!FLW_SECRET_KEY) {
-    return res.status(500).json({ message: "Missing Flutterwave secret key" });
-  }
-
   try {
-    const response = await axios.post(
-      "https://api.flutterwave.com/v3/bill-items/validate",
-      {
-        item_code: disco,
-        code: meter
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${FLW_SECRET_KEY}`
-        }
-      }
-    );
+    const response = await axios.post(`${VTPASS_API}/merchant-verify`, {
+      billersCode: meter,
+      serviceID: disco,
+      type: "prepaid"
+    }, { headers });
 
-    const data = response.data?.data;
-
-    if (!data) {
-      return res.status(502).json({ message: "Invalid response from Flutterwave" });
-    }
-
+    const data = response.data.content;
     res.json({
-      customer_name: data.customer_name || "N/A",
-      meter_type: data.type || "UNKNOWN",
-      debt: data.debt || 0
+      customer_name: data.Customer_Name,
+      meter_number: meter,
+      meter_type: data.meterType,
+      debt: data.outstanding || 0
     });
-
-  } catch (err) {
-    console.error("❌ FLW VERIFY ERROR:", err.response?.data || err.message);
-    res.status(500).json({ message: "Meter verification failed. Please try again." });
+  } catch {
+    res.status(500).json({ message: "VTPass verification failed" });
   }
 });
 
-// ✅ Pay Bill
 router.post("/", auth, async (req, res) => {
-  const { meter, amount, disco } = req.body;
-  if (!meter || !amount || !disco) {
-    return res.status(400).json({ message: "All fields are required" });
-  }
+  const { meter, amount, disco, phone } = req.body;
 
   try {
     const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.balance < amount) return res.status(400).json({ message: "Insufficient balance" });
 
-    if (user.balance < amount) {
-      return res.status(400).json({ message: "Insufficient balance" });
+    const reference = `epay_${Date.now()}`;
+    const purchase = await axios.post(`${VTPASS_API}/pay`, {
+      request_id: reference,
+      serviceID: disco,
+      billersCode: meter,
+      variation_code: "prepaid",
+      amount,
+      phone
+    }, { headers });
+
+    if (purchase.data.code !== "000") {
+      return res.status(400).json({ message: "Payment failed", response: purchase.data });
     }
 
-    // Deduct
     user.balance -= amount;
     await user.save();
 
-    const reference = `epay_${Date.now()}`;
-
-    const flwRes = await axios.post(
-      "https://api.flutterwave.com/v3/bills",
-      {
-        country: "NG",
-        customer: meter,
-        amount,
-        recurrence: "ONCE",
-        type: "PREPAID",
-        reference,
-        bill_item_code: disco
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${FLW_SECRET_KEY}`
-        }
-      }
-    );
-
-    // Log transaction
     await Transaction.create({
       userId: user._id,
       meter,
@@ -98,23 +68,15 @@ router.post("/", auth, async (req, res) => {
       reference
     });
 
-    res.json({ message: "Payment successful", data: flwRes.data });
-
-  } catch (err) {
-    console.error("❌ PAYMENT ERROR:", err.response?.data || err.message);
-    res.status(500).json({ message: "Payment failed. Please try again." });
+    res.json({ message: "Payment successful", response: purchase.data });
+  } catch {
+    res.status(500).json({ message: "Payment error" });
   }
 });
 
-// ✅ Transaction History
 router.get("/history", auth, async (req, res) => {
-  try {
-    const history = await Transaction.find({ userId: req.user.id }).sort({ timestamp: -1 });
-    res.json(history);
-  } catch (err) {
-    console.error("❌ HISTORY ERROR:", err.message);
-    res.status(500).json({ message: "Unable to load history" });
-  }
+  const history = await Transaction.find({ userId: req.user.id }).sort({ timestamp: -1 });
+  res.json(history);
 });
 
 module.exports = router;
