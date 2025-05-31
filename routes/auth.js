@@ -2,55 +2,63 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
-const User = require("../models/User");
 const router = express.Router();
+const User = require("../models/User");
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET;
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 
-// Register Route
+// SIGN UP
 router.post("/signup", async (req, res) => {
   const { username, email, phone, password } = req.body;
 
   try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ message: "Email already exists" });
+    const existing = await User.findOne({ email });
+    if (existing) return res.status(400).json({ message: "Email already exists" });
 
-    const hashed = await bcrypt.hash(password, 10);
-    const user = new User({ username, email, phone, password: hashed });
-    await user.save();
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Step 1: Create customer on Paystack
-    const customerRes = await axios.post(
+    // 1. Create Paystack customer
+    const paystackCustomer = await axios.post(
       "https://api.paystack.co/customer",
-      { email, first_name: username, phone },
-      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` } }
+      { email, phone, first_name: username },
+      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` } }
     );
 
-    const customer_code = customerRes.data.data.customer_code;
+    const customerCode = paystackCustomer.data.data.customer_code;
 
-    // Step 2: Create virtual account
+    // 2. Create Dedicated Account
     const acctRes = await axios.post(
       "https://api.paystack.co/dedicated_account",
       {
-        customer: customer_code,
-        preferred_bank: "wema-bank" // or "test-bank" for test mode
+        customer: customerCode,
+        preferred_bank: "wema-bank"
       },
-      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` } }
+      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` } }
     );
 
-    const acctData = acctRes.data.data;
+    const acct = acctRes.data.data;
 
-    user.paystack_customer_code = customer_code;
-    user.virtual_account_number = acctData.account_number;
-    user.virtual_account_bank = acctData.bank.name;
-    user.virtual_account_name = acctData.account_name;
+    // 3. Save new user with virtual account
+    const user = new User({
+      username,
+      email,
+      phone,
+      password: hashedPassword,
+      paystackCustomerCode: customerCode,
+      virtualAccount: {
+        bankName: acct.bank.name,
+        accountNumber: acct.account_number,
+        accountName: acct.account_name
+      }
+    });
+
     await user.save();
 
-    res.status(201).json({ message: "User created", account: acctData });
+    res.status(201).json({ message: "User created successfully" });
   } catch (err) {
-    console.error("Signup error:", err.message);
-    res.status(500).json({ message: "Signup failed" });
+    console.error("Signup error:", err.response?.data || err.message);
+    res.status(500).json({ message: "Signup failed", error: err.message });
   }
 });
 
